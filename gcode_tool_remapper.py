@@ -206,6 +206,10 @@ class RemapperApp(tk.Tk):
                   relief="flat", bg="#e0e0e0", activebackground="#c8c8c8",
                   font=("Segoe UI", 9), cursor="hand2",
                   padx=8).pack(side="left", padx=(8, 0))
+        tk.Button(input_row, text="Auto Remap All", command=self._auto_remap_all,
+                  relief="flat", bg="#e67e22", fg="white", activebackground="#ca6f1e",
+                  font=("Segoe UI", 9, "bold"), cursor="hand2",
+                  padx=10).pack(side="left", padx=(8, 0))
 
         self.old_entry.bind("<Return>", lambda e: self.new_entry.focus())
         self.new_entry.bind("<Return>", lambda e: self._add_rule())
@@ -333,6 +337,35 @@ class RemapperApp(tk.Tk):
         idx = sel[0]
         self.rules_list.delete(idx)
         self.rules.pop(idx)
+
+    def _auto_remap_all(self):
+        if not self.original_content:
+            messagebox.showwarning("No File", "Load a G-code file first.")
+            return
+
+        rules = auto_build_rules(self.original_content)
+
+        if not rules and not re.search(r'(?<!\d)T\d+(?!\d)', self.original_content, re.IGNORECASE):
+            messagebox.showwarning("No T Numbers", "No T numbers found in file.")
+            return
+
+        if not rules:
+            messagebox.showinfo("Already Sequential", "Tools are already in sequential order.")
+            return
+
+        # Clear existing rules
+        self.rules.clear()
+        self.rules_list.delete(0, "end")
+
+        # Populate with auto-generated rules
+        for old_num, new_num in rules:
+            self.rules.append((old_num, new_num))
+            self.rules_list.insert(
+                "end",
+                f"  T{old_num} → T{new_num}    (H{old_num}→H{new_num},  D{old_num}→D{new_num})"
+            )
+
+        self._preview()
 
     # ── Preview helpers ───────────────────────
 
