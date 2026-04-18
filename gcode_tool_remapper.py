@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, scrolledtext
 import re
 import os
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 try:
     import chardet
@@ -26,10 +26,12 @@ except ImportError:
 def build_pattern(prefix, number):
     """
     Match e.g. T20 but NOT T201 or T520.
+    Leading zeros are handled: H01 matches when remapping tool 1,
+    so zero-padded registers like H01/H06 remap correctly.
     Negative lookbehind/lookahead on digits handles exact boundary.
     """
     return re.compile(
-        rf'(?<!\d){re.escape(prefix)}{re.escape(str(number))}(?!\d)',
+        rf'(?<!\d){re.escape(prefix)}0*{re.escape(str(number))}(?!\d)',
         re.IGNORECASE
     )
 

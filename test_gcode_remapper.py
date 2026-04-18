@@ -53,6 +53,26 @@ class TestBuildPattern:
         p = build_pattern("T", 3)
         assert p.search("t3 M06")
 
+    def test_matches_zero_padded_h_register(self):
+        """H01 must match when remapping tool number 1 (leading zero is common in Haas programs)."""
+        p = build_pattern("H", 1)
+        assert p.search("G43 Z0.1 H01")
+
+    def test_matches_zero_padded_h_two_digit(self):
+        """H06 must match when remapping tool number 6."""
+        p = build_pattern("H", 6)
+        assert p.search("G43 Z0.1 H06")
+
+    def test_zero_padded_does_not_match_longer_number(self):
+        """H010 must NOT match when remapping tool 1 — trailing digit boundary holds."""
+        p = build_pattern("H", 1)
+        assert not p.search("H010")
+
+    def test_zero_padded_does_not_match_different_number(self):
+        """H016 must NOT match when remapping tool 6."""
+        p = build_pattern("H", 6)
+        assert not p.search("H016")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  remap_line — unit tests
@@ -109,6 +129,23 @@ class TestRemapLine:
         result, changed = remap_line(line, [(5, 55)])
         assert "T55" in result
         assert changed is True
+
+    def test_zero_padded_h_register_remapped(self):
+        """H01 must be remapped when the rule targets tool number 1.
+        This is the critical safety case: Haas programs commonly write H01/H06
+        even when the tool number is a single digit."""
+        line = "N19 G43 Z0.1 H01\n"
+        result, changed = remap_line(line, [(1, 99)])
+        assert "H99" in result
+        assert "H01" not in result
+        assert changed is True
+
+    def test_zero_padded_h_does_not_bleed_to_adjacent_number(self):
+        """H010 must not be matched when remapping tool 1 (boundary safety)."""
+        line = "G43 Z0.1 H010\n"
+        result, changed = remap_line(line, [(1, 99)])
+        assert result == line
+        assert changed is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +219,21 @@ class TestO3012:
         assert "T99" not in line
 
     # ── T1 tool-select line ───────────────────────────────────────────────────
+
+    def test_t1_h01_zero_padded_remapped(self, content):
+        """Line 14 — G43 Z0.1 H01 must update when remapping T1.
+        H01 is zero-padded; previously the pattern failed to match it."""
+        new, _ = remap_gcode(content, [(1, 99)])
+        line = new.splitlines()[13]
+        assert "H99" in line
+        assert "H01" not in line
+
+    def test_t7_h07_zero_padded_remapped(self, content):
+        """Line 40 — G43 Z0.1 H07 must update when remapping T7."""
+        new, _ = remap_gcode(content, [(7, 99)])
+        line = new.splitlines()[39]
+        assert "H99" in line
+        assert "H07" not in line
 
     def test_t1_tool_select_remapped(self, content):
         """Line 9 — N35 T1 M06 → N35 T99 M06"""
@@ -304,6 +356,29 @@ class TestO3020:
         line = new.splitlines()[7088]
         assert "D99" in line
         assert "D10" not in line
+
+    def test_t1_h01_zero_padded_remapped(self, content):
+        """Line 21 — G43 Z0.1 H01 must update when remapping T1.
+        This is the exact line reported as broken: H01 is zero-padded."""
+        new, _ = remap_gcode(content, [(1, 99)])
+        line = new.splitlines()[20]
+        assert "H99" in line
+        assert "H01" not in line
+
+    def test_t6_h06_zero_padded_remapped(self, content):
+        """Line 7141 — G43 Z0.1 H06 must update when remapping T6.
+        This is the second line reported as broken: H06 is zero-padded."""
+        new, _ = remap_gcode(content, [(6, 99)])
+        line = new.splitlines()[7140]
+        assert "H99" in line
+        assert "H06" not in line
+
+    def test_t2_h02_zero_padded_remapped(self, content):
+        """Line 7111 — G43 Z0.1 H02 must update when remapping T2."""
+        new, _ = remap_gcode(content, [(2, 99)])
+        line = new.splitlines()[7110]
+        assert "H99" in line
+        assert "H02" not in line
 
     def test_t10_does_not_affect_t20(self, content):
         """T20 (line 38) must not be touched when remapping T10."""
