@@ -8,7 +8,7 @@ Requires:  pip install pytest
 
 import os
 import pytest
-from gcode_tool_remapper import build_pattern, remap_line, remap_gcode
+from gcode_tool_remapper import build_pattern, remap_line, remap_gcode, auto_build_rules
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), "Test Sample Files")
 
@@ -510,3 +510,78 @@ class Test5400:
         orig_count = len(content.splitlines())
         new, _ = remap_gcode(content, [(1, 99), (2, 88), (5, 55)])
         assert len(new.splitlines()) == orig_count
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  auto_build_rules — unit tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestAutoRemap:
+
+    def test_sequential_from_first_appearance(self):
+        """T numbers are renumbered in the order they first appear."""
+        content = "T5 M06\nT2 M06\nT8 M06\n"
+        rules = auto_build_rules(content)
+        # T5 first → slot 1 (rule needed), T2 second → slot 2 (no-op, omitted), T8 third → slot 3 (rule needed)
+        assert rules == [(5, 1), (8, 3)]
+
+    def test_already_first_slot_skipped(self):
+        """If the first-seen T number is already T1, no rule is added for it."""
+        content = "T1 M06\nT3 M06\n"
+        rules = auto_build_rules(content)
+        # T1 is already slot 1 — skip it; T3 gets slot 2
+        assert (1, 1) not in rules
+        assert (3, 2) in rules
+
+    def test_already_sequential_returns_empty(self):
+        """If all tools are already in order T1, T2, T3... return empty list."""
+        content = "T1 M06\nT2 M06\nT3 M06\n"
+        rules = auto_build_rules(content)
+        assert rules == []
+
+    def test_duplicate_appearances_deduplicated(self):
+        """A T number that appears multiple times is only counted once (first seen)."""
+        content = "T3 M06\nT3 H3\nT1 M06\n"
+        rules = auto_build_rules(content)
+        assert rules == [(3, 1), (1, 2)]
+
+    def test_no_t_numbers_returns_empty(self):
+        """Content with no T numbers at all returns an empty list."""
+        content = "G00 X1.0 Y2.0\nG01 Z-0.5 F100\n"
+        rules = auto_build_rules(content)
+        assert rules == []
+
+    def test_case_insensitive_scan(self):
+        """Lowercase t tokens (e.g. t5) are treated the same as uppercase T5."""
+        content = "t5 M06\nt2 M06\n"
+        rules = auto_build_rules(content)
+        # t5 first → slot 1 (rule needed), t2 second → slot 2 (no-op, omitted)
+        assert rules == [(5, 1)]
+
+    def test_exact_boundary_t1_not_found_in_t10(self):
+        """T10 must not be treated as a T1 occurrence when scanning."""
+        content = "T10 M06\nT2 M06\n"
+        rules = auto_build_rules(content)
+        # T10 is slot 1 (rule needed), T2 is slot 2 (no-op, omitted)
+        assert rules == [(10, 1)]
+
+    def test_real_file_o3012(self):
+        """O3012.HAS contains T1, T7, T18, T19 in that order.
+        Expected rules: T1 stays (slot 1), T7→2, T18→3, T19→4."""
+        import os
+        path = os.path.join(os.path.dirname(__file__), "Test Sample Files", "O3012.HAS")
+        with open(path, "r", encoding="latin-1", errors="replace") as fh:
+            content = fh.read()
+        rules = auto_build_rules(content)
+        old_tools = [old for old, _ in rules]
+        new_tools = [new for _, new in rules]
+        # T1 already in slot 1 → not in rules
+        assert 1 not in old_tools
+        # T7 must become T2
+        assert (7, 2) in rules
+        # T18 must become T3
+        assert (18, 3) in rules
+        # T19 must become T4
+        assert (19, 4) in rules
+        # New numbers must be sequential with no gaps
+        assert sorted(new_tools) == list(range(min(new_tools), max(new_tools) + 1))

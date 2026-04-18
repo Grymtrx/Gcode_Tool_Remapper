@@ -97,6 +97,21 @@ def detect_encoding(path):
         return 'latin-1'
 
 
+def auto_build_rules(content):
+    """
+    Scan *content* for T-number tokens in document order.
+    Return a list of (old_num, new_num) tuples that renumber tools
+    sequentially by first appearance: first tool seen → 1, second → 2, etc.
+    Pairs where old_num == new_num are omitted (no-op rules).
+    """
+    seen = []
+    for m in re.finditer(r'(?<!\d)T(\d+)(?!\d)', content, re.IGNORECASE):
+        n = int(m.group(1))
+        if n not in seen:
+            seen.append(n)
+    return [(old, new) for new, old in enumerate(seen, start=1) if old != new]
+
+
 # ─────────────────────────────────────────────
 #  GUI constants
 # ─────────────────────────────────────────────
