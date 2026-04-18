@@ -345,7 +345,7 @@ class RemapperApp(tk.Tk):
 
         rules = auto_build_rules(self.original_content)
 
-        if not rules and not re.search(r'(?<!\d)T\d+(?!\d)', self.original_content, re.IGNORECASE):
+        if not rules and not _T_NUM_RE.search(self.original_content):
             messagebox.showwarning("No T Numbers", "No T numbers found in file.")
             return
 
