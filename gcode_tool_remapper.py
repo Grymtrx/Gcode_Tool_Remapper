@@ -289,6 +289,9 @@ class RemapperApp(tk.Tk):
         try:
             with open(path, 'r', encoding=self.file_enc, errors='replace') as f:
                 self.original_content = f.read()
+            self.rules.clear()
+            self.rules_list.delete(0, "end")
+            self._clear_preview()
             line_count = self.original_content.count('\n')
             enc_note = self.file_enc if HAS_CHARDET else "latin-1 (install chardet for auto-detect)"
             self.status_var.set(
