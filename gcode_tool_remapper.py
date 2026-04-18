@@ -10,6 +10,8 @@ from tkinter import filedialog, messagebox, scrolledtext
 import re
 import os
 
+VERSION = "0.0.1"
+
 try:
     import chardet
     HAS_CHARDET = True
@@ -118,7 +120,7 @@ CLR_LINENUM    = "#aaaaaa"
 class RemapperApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("G-Code Tool Remapper")
+        self.title(f"G-Code Tool Remapper  v{VERSION}")
         self.resizable(True, True)
         self.minsize(760, 620)
         self.configure(bg="#f5f5f5")
@@ -240,6 +242,11 @@ class RemapperApp(tk.Tk):
         self.preview_text.tag_config("add_line",    background=CLR_ADD_BG,     foreground=CLR_ADD_FG)
         self.preview_text.tag_config("linenum",     foreground=CLR_LINENUM)
         self.preview_text.tag_config("unchanged",   foreground="#444")
+
+        # ── Version footer ───────────────────
+        tk.Label(self, text=f"v{VERSION}", bg="#f5f5f5",
+                 font=("Segoe UI", 7), fg="#aaaaaa",
+                 anchor="e").pack(fill="x", padx=12, pady=(0, 4))
 
     # ── File I/O ─────────────────────────────
 
