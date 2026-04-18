@@ -15,7 +15,7 @@ This is a desktop utility for CNC machinists that **safely renumbers tool refere
 | **Remaps T, H, and D registers together** | A single rule `T7 → T12` also rewrites `H07 → H12` and `D07 → D12` — the three registers that always travel together in Fanuc-style G-code (tool select, length offset, diameter offset). |
 | **Exact-match substitution** | Uses regex negative look-around (`(?<!\d)T7(?!\d)`) so `T7` never matches inside `T70` or `T17`. |
 | **Collision-safe two-phase substitution** | Phase 1 replaces every matched token with a NUL-delimited placeholder (`\x00REMAP_T7\x00`). Phase 2 replaces placeholders with final values. This makes swaps (T10 ↔ T20) safe in a single pass — a plain left-to-right replace would cascade and corrupt both tools. |
-| **Diff preview** | Shows every changed line in a colour-coded view: red rows (original) above green rows (remapped), with line numbers, so the operator can verify the changes before committing. |
+| **Diff preview** | Shows every changed line in a colour-coded diff view — red rows (original) above green rows (remapped), mirroring the conventions used by GitHub and most code editors. Unchanged lines remain white, with any T-number tokens highlighted in purple so the operator can see at a glance which tools are still present and unaffected. |
 | **Saves to a new file** | Writes `<original_name>_remapped<ext>` by default, preserving the original file's encoding. The source file is never overwritten automatically. |
 
 ---
@@ -59,3 +59,4 @@ A PyInstaller spec file (`GCode Tool Remapper.spec`) bundles the app into a sing
 2. **T, H, and D are always remapped together** because Fanuc/Haas programs require all three to stay in sync; remapping only `T` while leaving `H` and `D` unchanged would create a broken program.
 3. **The source file is never overwritten** — the save dialog defaults to `_remapped` suffix, protecting the original.
 4. **Pure-function core** makes the remapping logic independently testable without launching the GUI.
+5. **Diff preview follows the red/green convention** used by GitHub and major IDEs: changed lines appear as a red "before" row immediately above a green "after" row, making the diff instantly readable to anyone familiar with source control tools. Unchanged lines use a purple highlight on T-number tokens specifically, so the operator can quickly see which tools exist in the file but were not targeted by the current rules — without cluttering H or D registers that are less commonly scanned at a glance.

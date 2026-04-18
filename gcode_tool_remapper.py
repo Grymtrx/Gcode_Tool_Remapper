@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, scrolledtext
 import re
 import os
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 try:
     import chardet
@@ -111,6 +111,12 @@ CLR_ADD_FG     = "#155724"
 CLR_GUTTER_DEL = "#f5a6a6"
 CLR_GUTTER_ADD = "#a8d5b5"
 CLR_LINENUM    = "#aaaaaa"
+CLR_T_BG       = "#ede0f7"
+CLR_T_FG       = "#4a0e8f"
+
+# Matches any T-number token (e.g. T1, T18) with exact digit boundaries.
+# Used only for syntax highlighting in the preview — not for remapping.
+_T_NUM_RE = re.compile(r'(?<!\d)T\d+(?!\d)', re.IGNORECASE)
 
 
 # ─────────────────────────────────────────────
@@ -216,7 +222,8 @@ class RemapperApp(tk.Tk):
         legend = tk.Frame(self, bg="#f5f5f5")
         legend.pack(fill="x", padx=10, pady=(0, 2))
         for bg, label in ((CLR_DEL_BG, "  Before (original)  "),
-                          (CLR_ADD_BG, "  After (remapped)  ")):
+                          (CLR_ADD_BG, "  After (remapped)  "),
+                          (CLR_T_BG,   "  T-number (unchanged)  ")):
             tk.Label(legend, text="   ", bg=bg).pack(side="left", padx=(0, 2))
             tk.Label(legend, text=label, bg="#f5f5f5",
                      font=("Segoe UI", 8), fg="#555").pack(side="left", padx=(0, 14))
@@ -242,6 +249,7 @@ class RemapperApp(tk.Tk):
         self.preview_text.tag_config("add_line",    background=CLR_ADD_BG,     foreground=CLR_ADD_FG)
         self.preview_text.tag_config("linenum",     foreground=CLR_LINENUM)
         self.preview_text.tag_config("unchanged",   foreground="#444")
+        self.preview_text.tag_config("t_highlight", background=CLR_T_BG, foreground=CLR_T_FG)
 
         # ── Version footer ───────────────────
         tk.Label(self, text=f"v{VERSION}", bg="#f5f5f5",
@@ -309,6 +317,21 @@ class RemapperApp(tk.Tk):
         self.rules_list.delete(idx)
         self.rules.pop(idx)
 
+    # ── Preview helpers ───────────────────────
+
+    def _insert_t_highlighted(self, text, base_tag):
+        """Insert *text* into the preview widget, applying the 't_highlight' tag
+        over every T-number token and *base_tag* over everything else.
+        Only called for unchanged lines — remapping logic is untouched."""
+        last = 0
+        for m in _T_NUM_RE.finditer(text):
+            if m.start() > last:
+                self.preview_text.insert("end", text[last:m.start()], base_tag)
+            self.preview_text.insert("end", m.group(), "t_highlight")
+            last = m.end()
+        if last < len(text):
+            self.preview_text.insert("end", text[last:], base_tag)
+
     # ── Preview ──────────────────────────────
 
     def _preview(self):
@@ -343,16 +366,16 @@ class RemapperApp(tk.Tk):
                 # Blank separator
                 self.preview_text.insert("end", "\n")
             else:
-                self.preview_text.insert("end", linenum,                    "linenum")
-                self.preview_text.insert("end", "  ",                       "linenum")
-                self.preview_text.insert("end", orig.rstrip('\r\n') + "\n", "unchanged")
+                self.preview_text.insert("end", linenum, "linenum")
+                self.preview_text.insert("end", "  ",    "linenum")
+                self._insert_t_highlighted(orig.rstrip('\r\n') + "\n", "unchanged")
 
         self.preview_text.configure(state="disabled")
 
         total = len(changed_lines)
         self.status_var.set(
             f"{total} line{'s' if total != 1 else ''} changed  |  "
-            f"Red = original  ·  Green = remapped  |  File not yet saved."
+            f"Red = original  ·  Green = remapped  ·  Purple = T-number  |  File not yet saved."
         )
 
     # ── Save ─────────────────────────────────
