@@ -132,7 +132,7 @@ CLR_T_BG       = "#ede0f7"
 CLR_T_FG       = "#4a0e8f"
 
 # Matches any T-number token (e.g. T1, T18) with exact digit boundaries.
-# Used only for syntax highlighting in the preview — not for remapping.
+# Used for preview syntax highlighting and the auto-remap "no T numbers" guard.
 _T_NUM_RE = re.compile(r'(?<!\d)T\d+(?!\d)', re.IGNORECASE)
 
 
