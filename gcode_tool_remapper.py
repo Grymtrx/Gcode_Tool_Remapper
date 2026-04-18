@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, scrolledtext
 import re
 import os
 
-VERSION = "0.0.3"
+VERSION = "0.1.0"
 
 try:
     import chardet
