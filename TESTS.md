@@ -6,7 +6,7 @@ Run with:
 python -m pytest test_gcode_remapper.py -v
 ```
 
-48 tests, 4 test classes backed by real `.HAS` sample programs, plus 2 unit-test classes that exercise the core functions directly.
+59 tests, 4 test classes backed by real `.HAS` sample programs, plus 2 unit-test classes that exercise the core functions directly.
 
 ---
 
@@ -16,7 +16,7 @@ python -m pytest test_gcode_remapper.py -v
 |---|---|---|---|
 | `O3012.HAS` | Cut Off Die Holder Top | T1, T7, T18 (×3 D18), T19 | T18 has T + H + D all used; T1/T18/T19 test exact-boundary isolation |
 | `O3031.HAS` | Notching & Pilot Stripper | T20, T15 (×8 D15), T13 (×2 D13) | Largest number of D-register occurrences for a single tool; tests bulk D replacement |
-| `O3020.HAS` | Large Punch Holder Main | T1, T2, T5, T6, T10 (D10), T11, T13 (×2 occ.), T20 | T10 has a D register; T13 appears twice deep in a long file; tests line-number reporting |
+| `O3020.HAS` | Large Punch Holder Main | T1, T2, T5, T6, T10 (D10), T11, T13 (×2 occ.), T20 | T10 has a D register; T13 appears twice deep in a long file; tests line-number reporting. **Primary file for zero-padded H register tests** — H01, H02, H06 are all zero-padded |
 | `5400.HAS` | Qualifier/Straightener Base | T1–T7, non-zero-padded H values, T5 with ×4 D5 | Only file with unpadded H registers; best for multi-rule and full T+H+D single-digit coverage |
 
 ---
@@ -33,6 +33,10 @@ These tests exercise `build_pattern(prefix, number)` directly, before any file i
 | `test_matches_h_register` | `H18` is found correctly |
 | `test_matches_d_register` | `D15` is found inside a cutter-comp line |
 | `test_case_insensitive` | Lowercase `t3` is matched (flag `re.IGNORECASE` active) |
+| `test_matches_zero_padded_h_register` | `H01` is matched when remapping tool 1 — the `0*` in the pattern consumes the leading zero |
+| `test_matches_zero_padded_h_two_digit` | `H06` is matched when remapping tool 6 |
+| `test_zero_padded_does_not_match_longer_number` | `H010` is **not** matched when remapping tool 1 — trailing digit boundary still holds |
+| `test_zero_padded_does_not_match_different_number` | `H016` is **not** matched when remapping tool 6 |
 
 ---
 
@@ -49,12 +53,14 @@ These tests call `remap_line(line, rules)` with hand-crafted strings to isolate 
 | `test_swap_no_cascade` | Rules `(1→2)` and `(2→1)` on `"T1 T2"` produce `"T2 T1"` — two-phase placeholder logic prevents cascading |
 | `test_original_line_unchanged_object` | Input string is not mutated by `remap_line` |
 | `test_comment_content_is_remapped` | Tool numbers inside Fanuc parenthesis comments are treated as plain text and **are** remapped (by design) |
+| `test_zero_padded_h_register_remapped` | `G43 Z0.1 H01` becomes `H99` when remapping tool 1 — the critical bug case for zero-padded registers |
+| `test_zero_padded_h_does_not_bleed_to_adjacent_number` | `G43 Z0.1 H010` is unchanged when remapping tool 1 — boundary safety verified on a zero-padded input |
 
 ---
 
 ## TestO3012 — Cut Off Die Holder Top (`O3012.HAS`)
 
-This file has four tools. T18 is the most interesting: it uses a cutter-radius compensation `D18` register on three separate G42 lines, making it the primary file for testing D-register coverage and isolation between nearby tool numbers (T18 vs T19).
+This file has four tools. T18 is the most interesting: it uses a cutter-radius compensation `D18` register on three separate G42 lines, making it the primary file for testing D-register coverage and isolation between nearby tool numbers (T18 vs T19). T1 and T7 both use zero-padded H registers (`H01`, `H07`), making this file also important for verifying the zero-padding fix.
 
 | Test | File lines checked | What it verifies |
 |---|---|---|
@@ -66,6 +72,8 @@ This file has four tools. T18 is the most interesting: it uses a cutter-radius c
 | `test_remap_t1_does_not_alter_t19` | Line 139 | Remapping T1 leaves T19 unchanged |
 | `test_remap_t18_does_not_alter_t1` | Line 9 | Remapping T18 leaves T1 unchanged |
 | `test_remap_t18_does_not_alter_t19` | Line 139 | T18 and T19 are independent — remapping one never touches the other |
+| `test_t1_h01_zero_padded_remapped` | Line 14: `G43 Z0.1 H01` | Zero-padded H01 is matched and updated when remapping T1 |
+| `test_t7_h07_zero_padded_remapped` | Line 40: `G43 Z0.1 H07` | Zero-padded H07 is matched and updated when remapping T7 |
 | `test_t1_tool_select_remapped` | Line 9: `N35 T1 M06` | Basic T1 update confirms single-digit tools work |
 | `test_swap_t1_and_t7_tool_select_lines` | Lines 9 and 35 | Swap T1↔T7: original T1 line reads T7 and vice versa |
 | `test_swap_t1_and_t7_no_cascade_artifacts` | Whole file | No `T77` or `T11` anywhere — confirms two-phase substitution prevents cascading |
@@ -90,13 +98,16 @@ T15 has 8 D-register appearances spread across the program — the highest D-reg
 
 ## TestO3020 — Large Punch Holder Main (`O3020.HAS`)
 
-The longest file in the suite. T10 carries a D10 register, and T13 appears twice — once early and once thousands of lines into the file — verifying that the remapper scans the entire file and reports line numbers correctly.
+The longest file in the suite. T10 carries a D10 register, and T13 appears twice — once early and once thousands of lines into the file — verifying that the remapper scans the entire file and reports line numbers correctly. This file also contains the exact zero-padded H registers that triggered the v0.0.3 bug report: H01 (T1), H02 (T2), and H06 (T6).
 
 | Test | File lines checked | What it verifies |
 |---|---|---|
 | `test_t10_tool_select_remapped` | Line 7079 | T10 updated deep in a large file |
 | `test_t10_h_register_remapped` | Line 7084 | H10 updated |
 | `test_t10_d_register_remapped` | Line 7089 | D10 updated |
+| `test_t1_h01_zero_padded_remapped` | Line 21: `G43 Z0.1 H01` | **Bug regression test** — the exact line reported broken; H01 must update when remapping T1 |
+| `test_t6_h06_zero_padded_remapped` | Line 7141: `G43 Z0.1 H06` | **Bug regression test** — the second line reported broken; H06 must update when remapping T6 |
+| `test_t2_h02_zero_padded_remapped` | Line 7111: `G43 Z0.1 H02` | H02 also zero-padded — confirms the fix is general, not special-cased |
 | `test_t10_does_not_affect_t20` | Line 38 | T20 survives a T10 remap — `T20` does not become `T990` |
 | `test_t20_and_h20_remapped` | Lines 38, 43 | T20 and H20 both update when remapping T20 |
 | `test_t13_both_occurrences_remapped` | Lines 54, 59, 3273, 3278 | T13 appears twice; at least 4 lines must be reported as changed |
@@ -127,7 +138,11 @@ The only file using non-zero-padded H registers (`H1`, `H2` … `H7` instead of 
 
 | Behaviour | Test(s) that verify it |
 |---|---|
+| Behaviour | Test(s) that verify it |
+|---|---|
 | Exact-match boundary — `T1` never matches `T10`, `T18`, `T19` | `test_no_match_when_trailing_digit`, `test_exact_boundary_no_partial_match`, `test_remap_t1_does_not_alter_t18/t19`, `test_t10_does_not_affect_t20` |
+| Zero-padded H registers matched correctly (`H01`, `H06`, `H07`) | `test_matches_zero_padded_h_register`, `test_matches_zero_padded_h_two_digit`, `test_zero_padded_h_register_remapped`, `test_t1_h01_zero_padded_remapped` (O3012 + O3020), `test_t6_h06_zero_padded_remapped`, `test_t7_h07_zero_padded_remapped`, `test_t2_h02_zero_padded_remapped` |
+| Zero-padding fix does not break boundary safety (`H010` ≠ tool 1) | `test_zero_padded_does_not_match_longer_number`, `test_zero_padded_does_not_match_different_number`, `test_zero_padded_h_does_not_bleed_to_adjacent_number` |
 | T, H, D registers all updated by one rule | `test_t_h_d_all_remapped_by_one_rule`, `test_t18_*`, `test_t15_*`, `test_t10_*`, `test_t5_*` |
 | Two-phase substitution prevents cascading swaps | `test_swap_no_cascade`, `test_swap_t1_and_t7_*` |
 | All D-register occurrences updated (not just the first) | `test_t18_all_three_d18_lines_remapped`, `test_t15_all_eight_d15_lines_remapped`, `test_t5_all_four_d5_lines_remapped` |
