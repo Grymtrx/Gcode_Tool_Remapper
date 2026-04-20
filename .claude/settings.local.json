@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest test_remapper.py -v --tb=short)",
+      "Bash(python -m pytest test_remapper.py::TestRemapGcode::test_content_roundtrip_with_inverse_rules -v --tb=long)",
+      "Bash(python -m pytest test_remapper.py -v --tb=short -q)",
+      "Bash(python -m pytest test_remapper.py -q)"
+    ]
+  }
+}
